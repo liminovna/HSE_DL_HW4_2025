@@ -109,6 +109,10 @@ python run_llama.py --option lora --epochs 5 --lr 2e-5 --batch_size 10 --train d
 
 ### Submission Guideline
 
+**Code:**
+Submission procedure is the same as in HW1, any model weights (if needed for advanced implementation) need to be hosted on your own drive with link shared in the report.
+
+
 **Report (optional; mandatory for 10 consideration):** Add pdf file, named report.pdf, if (1) you've implemented something else on top of the requirements and further improved accuracy for possible extra points (see "Grading" below), and/or (2) if your best results are with some hyperparameters other than the default, and you want to specify how we should run your code. If you're doing (1), we expect your report should be 1-2 pages, but no more than 3 pages. If you're doing (2), the report can be very brief.
 
 
