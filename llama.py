@@ -32,7 +32,7 @@ class LayerNorm(torch.nn.Module):
 
     def _norm(self, x):
         """
-        Compute layer normalization by subtracting the mean and dividing by 
+        Compute layer normalization by subtracting the mean and dividing by
         the standard deviation along the last dimension. Use the standard
         LayerNorm formula: (x - mean) / sqrt(variance + eps)
 
@@ -43,7 +43,10 @@ class LayerNorm(torch.nn.Module):
             torch.Tensor: The normalized tensor.
         """
         # todo
-        raise NotImplementedError
+        x_mean = x.mean(dim=-1, keepdim=True)
+        x_variance = x.var(dim=-1, keepdim=True, unbiased=False)
+        return (x - x_mean) / torch.sqrt(x_variance + self.eps)
+
 
     def forward(self, x):
         """
@@ -58,7 +61,7 @@ class LayerNorm(torch.nn.Module):
         """
         output = self._norm(x.float()).type_as(x)
         return output * self.weight + self.bias
-    
+
 
 class Attention(nn.Module):
     def __init__(self, config: LlamaConfig):
@@ -94,7 +97,12 @@ class Attention(nn.Module):
         attention matrix before applying it to the value tensor.
         '''
         # todo
-        raise NotImplementedError
+        att = (query @ key.transpose(-2, -1)) * (1.0 / math.sqrt(key.size(-1)))
+
+        att = F.softmax(att, dim=-1)
+        att = self.attn_dropout(att)
+        scores = att @ value
+        return scores
 
     def forward(
         self,
@@ -188,16 +196,25 @@ class LlamaLayer(nn.Module):
         https://arxiv.org/pdf/1706.03762.pdf.
 
         The transformer block should consist of:
-        1) layer normalization of the input 
+        1) layer normalization of the input
         2) self-attention on the layer-normalized input
         3) a residual connection (i.e., add the input to the output of the self-attention)
-        3) layer normalization on the output of the self-attention
-        4) a feed-forward network on the layer-normalized output of the self-attention
-        5) add a residual connection from the unnormalized self-attention output to the
+        4) layer normalization on the output of the self-attention
+        5) a feed-forward network on the layer-normalized output of the self-attention
+        6) add a residual connection from the unnormalized self-attention output to the
            output of the feed-forward network
         '''
         # todo
-        raise NotImplementedError
+
+        attn_output = self.attention(self.attention_norm(x)) # 1,2
+
+        h = x + attn_output # 3
+
+        ffn_output = self.feed_forward(self.ffn_norm(h)) # 4,5
+
+        out = h + ffn_output # 6
+
+        return out
 
 class Llama(LlamaPreTrainedModel):
     def __init__(self, config: LlamaConfig):
@@ -261,10 +278,10 @@ class Llama(LlamaPreTrainedModel):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
-        We perform this generation using basic temperature sampling with epsilon sampling (i.e. 
-        filtering out tokens with probability below the epsilon threshold at each timestep). 
-        Most likely you'll want to make sure to be in model.eval() mode of operation for this. 
-        Also note this is a super inefficient version of sampling with no key/value cache, 
+        We perform this generation using basic temperature sampling with epsilon sampling (i.e.
+        filtering out tokens with probability below the epsilon threshold at each timestep).
+        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
+        Also note this is a super inefficient version of sampling with no key/value cache,
         but you are free to add any optimizations on top of this.
         """
         for _ in range(max_new_tokens):
@@ -274,11 +291,10 @@ class Llama(LlamaPreTrainedModel):
             logits, _ = self(idx_cond)
             logits = logits[:, -1, :] # crop to just the final time step
             # todo
-            raise NotImplementedError
-            
+
             if temperature == 0.0:
                 # select the single most likely index
-                idx_next = None
+                idx_next = torch.argmax(logits, dim=-1, keepdim=True)
             else:
                 '''
                 Perform temperature sampling with epsilon sampling:
@@ -288,10 +304,17 @@ class Llama(LlamaPreTrainedModel):
                 4) Renormalize the filtered probabilities so they sum to 1.
                 5) Sample from this filtered probability distribution.
                 '''
-                idx_next = None
+                logits = logits / temperature # 1
+                probs = F.softmax(logits, dim=-1) # 1
+
+                mask = probs >= epsilon # 2
+                probs = probs * mask # 3
+                probs = probs / probs.sum(dim=-1, keepdim=True) # 4
+
+                idx_next = torch.multinomial(probs, num_samples=1) # 5
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
-        
+
         return idx
 
 def load_pretrained(checkpoint):
