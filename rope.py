@@ -64,12 +64,30 @@ def apply_rotary_emb(
     # First, compute the trigonometric values in the second and fourth columns in
     # slide 49 (linked above).
 
+    freqs = 1.0 / (theta ** (torch.arange(0, head_dim, 2)[: (head_dim // 2)].float() / head_dim))
+    freqs = freqs.to(device)
+
+    t = torch.arange(seqlen, device=device).float()
+
+    freqs = torch.outer(t, freqs).float()
+
+    cos = freqs.cos()
+    sin = freqs.sin()
+
+    cos = cos.unsqueeze(0).unsqueeze(2)
+    sin = sin.unsqueeze(0).unsqueeze(2)
+
     # Then, combine these trigonometric values with the tensors query_real, query_imag,
     # key_real, and key_imag.
 
-    raise NotImplementedError
+    query_real_rot = query_real * cos - query_imag * sin
+    query_imag_rot = query_real * sin + query_imag * cos
 
-    query_out = None
-    key_out = None
+    key_real_rot = key_real * cos - key_imag * sin
+    key_imag_rot = key_real * sin + key_imag * cos
+
+    query_out = torch.stack([query_real_rot, query_imag_rot], dim=-1).flatten(-2)
+    key_out = torch.stack([key_real_rot, key_imag_rot], dim=-1).flatten(-2)
+
     # Return the rotary position embeddings for the query and key tensors
-    return query_out, key_out
+    return query_out.type_as(query), key_out.type_as(key)
